@@ -26,9 +26,7 @@ It's a hobby project for funsies until we find the cow level.
 
 There's a known bug that's only impacting two files: Quest/Dungeon_Affix_HellPortal.qst.json and Quest/CMP_Kehj_Omaths.qst.json. I decided to publish this now since I don't think that'll have an impact on cow hunting.
 
-As of 2023-06-24 it took my M1 Macbook about 24 minutes to process everything. Pretty slow. An obvious improvement would be distributing work to make this multi-threaded using node's `cluster` module. The forked processes should be sent a list of files to process and off they'll go. That should dramatically improve processing time. I already ran `0x` on the code, and unsurprisingly most of the time is taken `removeEmptyObjs::removeNeedle`. There's a lot of tiny parts of the strings to remove
-
-Re: processing time, I'm also doing a hilariously poor job of parsing and stringifying things. I wrote everything with string manipulation since I suspected that would be much faster than traversing each object, finding keys and values, going up a level and deleting keys, etc... but I may have been way off there. It would be cool to see an alternative, simpler approach using the parsed JSON objects.
+I'm doing a hilariously poor job of parsing and stringifying things. I wrote everything with string manipulation since I suspected that would be much faster than traversing each object, finding keys and values, going up a level and deleting keys, etc... but I may have been way off there. It would be cool to see an alternative, simpler approach using the parsed JSON objects.
 
 It would be great to have even more information filtered out. I hit the low hanging fruit - `"value":-1` and `"value":2^32-1`. A static text filter would be really nice. 
 

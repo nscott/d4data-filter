@@ -1,6 +1,7 @@
 import { glob } from "glob";
 import fs from 'fs/promises';
 import path from 'path';
+import process from 'node:process';
 
 export class D4DataFilter {
   // TODO: Add basic full-text string filters for entire segments we'd like to remove.
@@ -57,12 +58,14 @@ export class D4DataFilter {
   path: string;
   debug: boolean;
   debugFiles: string[];
+  filesToProcess: string[];
 
   constructor(prefix: string, dataDir: string, enableDebug?: boolean) {
     this.prefix = prefix;
     this.dataDir = dataDir;
     this.path = `${this.dataDir}/json/base/meta`;
     this.outputDir = "./output";
+    this.filesToProcess = [];
     this.debug = enableDebug || false;
     // A helpful list of files to check for parsing problems
     // If all of these work, it's likely whatever changes you make will also work.
@@ -79,7 +82,6 @@ export class D4DataFilter {
 
   async process(): Promise<void> {
     const fileNames = await this.fileList();
-    let filesProcessed = 0;
     const promises = []
     for(let fileName of fileNames) {
       const fileData = await fs.readFile(fileName, { encoding: 'utf8' });
@@ -98,10 +100,8 @@ export class D4DataFilter {
       asStr = await this.addStrings(asStr, fileName);
 
       promises.push(this.writeFile(fileName, asStr));
-      filesProcessed += 1;
-      if (filesProcessed % 1000 == 0) {
-        console.log(`Processed ${filesProcessed}/${fileNames.length} (${Math.round((filesProcessed/(fileNames.length*1.0))*100)}%)`)
-      }
+
+      process.send!({cmd: "fileProcessed"});
     }
     await Promise.all(promises);
   }
@@ -111,6 +111,10 @@ export class D4DataFilter {
    * @returns A list of files to process
    */
   async fileList(): Promise<string[]> {
+    if (this.filesToProcess.length > 0) {
+      return this.filesToProcess;
+    }
+
     if (this.debug) {
       const result: string[] = [];
       for(let str of this.debugFiles) {
@@ -118,6 +122,7 @@ export class D4DataFilter {
       }
       return result;
     }
+
     return await glob(`${this.path}/**/*.json`);
   }
 
