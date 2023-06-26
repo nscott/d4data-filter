@@ -1,7 +1,8 @@
 import { glob } from "glob";
 import fs from 'fs/promises';
-import path from 'path';
 import process from 'node:process';
+import DEBUG_FILES from "./debugFiles.js";
+import { writeJSONFile } from "./utils.js";
 
 export class D4DataFilter {
   // TODO: Add basic full-text string filters for entire segments we'd like to remove.
@@ -57,7 +58,6 @@ export class D4DataFilter {
   outputDir: string;
   path: string;
   debug: boolean;
-  debugFiles: string[];
   filesToProcess: string[];
 
   constructor(prefix: string, dataDir: string, enableDebug?: boolean) {
@@ -67,17 +67,6 @@ export class D4DataFilter {
     this.outputDir = "./output";
     this.filesToProcess = [];
     this.debug = enableDebug || false;
-    // A helpful list of files to check for parsing problems
-    // If all of these work, it's likely whatever changes you make will also work.
-    this.debugFiles = [
-      'Actor/TWN_Step_KedBardu_Sign_OxenGod.acr.json', 
-      'SkillKit/Necromancer.skl.json', 
-      'EffectGroup/Conv_QST_Step_LorathOpt_Meshif.efg.json',
-      'MarkerSet/Scos_Moors (Town_Tirmair_Base).mrk.json',
-      'Quest/Dungeon_Affix_HellPortal.qst.json',
-      'Quest/SMP_WishingWell.qst.json',
-      'ParagonBoard/Paragon_Sorc_00.pbd.json',
-    ];
   }
 
   async process(): Promise<void> {
@@ -99,7 +88,10 @@ export class D4DataFilter {
       
       asStr = await this.addStrings(asStr, fileName);
 
-      promises.push(this.writeFile(fileName, asStr));
+      asStr = this.addSnoRelationships(asStr, fileName);
+
+      const newFileName = fileName.replace(this.path, this.outputDir);
+      promises.push(writeJSONFile(newFileName, asStr));
 
       process.send!({cmd: "fileProcessed"});
     }
@@ -117,31 +109,13 @@ export class D4DataFilter {
 
     if (this.debug) {
       const result: string[] = [];
-      for(let str of this.debugFiles) {
+      for(let str of DEBUG_FILES) {
         result.push(`${this.path}/${str}`);
       }
       return result;
     }
 
     return await glob(`${this.path}/**/*.json`);
-  }
-
-  async writeFile(origFileName: string, content: string): Promise<void> {
-    // Remove the relative pathing info
-    const newFileName = origFileName.replace(this.path, this.outputDir);
-    await this.createDirectories(newFileName);
-    try {
-      return fs.writeFile(newFileName, JSON.stringify(JSON.parse(content), null, 2), { encoding: 'utf8' });
-    } catch(e: any) {
-      console.log(`Could not write file '${newFileName}': ${e.message}`);
-      return;
-    }
-  }
-
-  async createDirectories(fileName: string): Promise<void> {
-    const dirName = path.dirname(fileName);
-    await fs.mkdir(dirName, { recursive: true });
-    return;
   }
 
   /**
@@ -292,12 +266,77 @@ export class D4DataFilter {
       addition.push(newObj);
     }
 
-    const strToAppend = `"${this.prefix}_strings":${JSON.stringify(addition)}`;
+    content = this.addObjToFile(content, "strings", addition);
+    return content;
+  }
 
-    // Open the object and shove this in at the end.
+  /**
+   * Run through the current `content` and extract any sno relationships.
+   */
+  addSnoRelationships(content: string, fileName: string): string {
+    /* 
+    sno data always appears to look something like this:
+    "snoSpeaker": {
+      "value": 446527,
+      "group": 72,
+      "groupName": "Speaker",
+      "type": "sno",
+      "name": "NPC_QST_Lorath"
+    },
+    Again, we could parse the object, scan for it, etc... or we could do awful things with text parsing
+    */
+    const relationships: Map<string, SnoData[]> = new Map();
+    let pos = 0;
+    while(pos != -1 && pos < content.length) {
+      // There are unks that have type: "sno" in them, so look for those and word backwards
+      pos = content.indexOf('"type":"sno"', pos);
+      if (pos == -1) {
+        break;
+      }
+
+      const start = content.lastIndexOf("{", pos);
+      const end = content.indexOf("}", pos);
+      // End of substring is exclusive
+      const snoStr = content.substring(start, end + 1);
+      let snoData: SnoData = {value: -1, groupName: "", group: -1, type: "sno", name: ""};
+      try {
+        snoData = JSON.parse(snoStr);
+      } catch(e: any) {
+        console.log(snoStr);
+        pos = end + 1;
+        continue;
+      }
+
+      if (!relationships.has(snoData.groupName)) {
+        relationships.set(snoData.groupName, []);
+      }
+      const existingData = relationships.get(snoData.groupName);
+      existingData?.push(snoData);
+      pos = end + 1
+    }
+
+    const result = [];
+    for(const [groupName, snos] of relationships) {
+      const snoVals = snos.map((s) => s.value);
+      result.push({rel: groupName, snoValues: snoVals});
+    }
+
+    return this.addObjToFile(content, "snoRels", result);
+  }
+
+  /**
+   * Add a new key-value pair to a file.
+   * 
+   * @param content The file contents
+   * @param key A key to add to the file
+   * @param data The data at that key
+   * @returns The modified content
+   */
+  private addObjToFile(content: string, key: string, data: any): string {
     content = content.trim();
+    // Remove the closing curly }
     content = content.substring(0, content.length - 1);
-    content = `${content},${strToAppend}}`
+    content = `${content},"${this.prefix}_${key}":${JSON.stringify(data)}}`
     return content;
   }
 
@@ -324,5 +363,13 @@ export class D4DataFilter {
     return `${this.dataDir}/json/enUS_Text/meta/StringList/${stringPrefix}_${strippedFileName}.stl.json`;
   }
 };
+
+export interface SnoData {
+  value: number,
+  group: number,
+  groupName: string,
+  type: string,
+  name: string
+}
 
 export default D4DataFilter;

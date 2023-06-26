@@ -10,11 +10,23 @@ Today it only removes unhelpful information and adds the string data back to the
 
 ## How to Run It
 
-Make sure you have a local copy of (d4data)[https://github.com/blizzhackers/d4data] downloaded locally.
+Make sure you have a local copy of [d4data](https://github.com/blizzhackers/d4data) downloaded locally.
 
 This runs over all of the JSON files in that directory. By default this looks at `../d4data` to find the appropriate JSON files. You can override this by setting the environment variable `D4DATA_DIR` (e.g. `export D4DATA_DIR=../my_d4data`).
 
 Produced files attempt to mimic the original file structure in the `d4data` repository. Files that have no equivalent (such as specific areas of data that may be of higher interest) are in the `df_output` directory.
+
+Use it with yarn: `yarn build && DEBUG=0 GRAPH=0 yarn start`. Setting `GRAPH=1` will *only* build graph output.
+
+### Generating A Graph
+
+You can generate a graph with relationships by specifying `GRAPH=1 DEPTH=N SNOID=<snoid> yarn start`. The `DEPTH` argument should be how many connections are explored both connecting to, and connecting out, from the given SNO ID. This produces a GraphViz-compatible `dot` file.
+
+The whole graph is unrealistic to export at once.
+
+There's a lot of nodes and edges - 327k nodes and 2.6M edges to be precise. Graphviz/dot doesn't really handle huge graphs well, at least in part because it can't take advantage of multiple threads.
+
+You can try to generate the SVG using [Gephi](https://gephi.org/) with the OpenOrd layout with 2000 iterations. Make sure to increase Gephi's memory to the maximum (22G) if you want to export the graph. 
 
 ## "Why didn't you do X?"
 
@@ -34,6 +46,6 @@ There's also no grouped files. Lots of things fit well together as an "idea" - f
 
 Another neat thing I wanted to do was add annotations to some of the conditional files. Things like `bNegate` and `eComparisonOp` could be read and understood then formed into higher-order logical conditions as emitted as a single new attribute on the conditionals.
 
-I really want to add `sno` relationship information. This would allow a very easy graph to be built with annotated edges depending on how 2 files are related.
+It would be ideal to serialize the graph so it's faster to run lookup queries on it for different SNO IDs.
 
 Finally, it's probably a separate project, but adding the ability to export all of this into something like a SQLite DB and host a tool in a browser looking at the data would be really cool.

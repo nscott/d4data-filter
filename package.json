@@ -1,6 +1,6 @@
 {
   "name": "d4data-filter",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "main": "index.js",
   "author": "Nathan Scott <natedscott@gmail.com>",
   "license": "MIT",
@@ -16,6 +16,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node ./bin/app.js",
-    "dev": "ts-node --esm ./src/app.ts"
+    "dev": "ts-node --esm ./src/app.ts",
+    "package": "zip -vr9 v1.1.0.zip output/ -x \"*.DS_Store\" > zip_output.txt",
+    "graph-png": "dot -Ksfdp -x -Goverlap=scale -Tpng ./df_output/graph.dot > ./df_output/graph.png"
   }
 }
